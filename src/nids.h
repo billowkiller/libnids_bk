@@ -142,6 +142,10 @@ struct tcp_timeout
 };
 
 int nids_init (void);
+/*	tcp_filter before handle tcp_process */
+void nids_register_tcp_filter (void (*));
+void nids_unregister_tcp_filter (void (*));
+/* end */
 void nids_register_ip_frag (void (*));
 void nids_unregister_ip_frag (void (*));
 void nids_register_ip (void (*));
@@ -152,7 +156,7 @@ void nids_register_udp (void (*));
 void nids_unregister_udp (void (*));
 void nids_killtcp (struct tcp_stream *);
 void nids_discard (struct tcp_stream *, int);
-int nids_run (void);
+int nids_run ();
 int nids_run2(u_char *, int);
 void nids_free_tcp_stream(struct tcp_stream * a_tcp);
 void nids_exit(void);

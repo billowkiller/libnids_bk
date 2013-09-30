@@ -29,11 +29,21 @@ adres (struct tuple4 addr)
   return buf;
 }
 
+/*	only accept status code 200
+ *  relocation may affect
+ * 	@return
+ * 		0  do not handle
+ * 		-1 continue data
+ * 		1  handle data begin
+ */
 int http_parse(const char *data, char **split)
 {
 	if(strncmp(data, "HTTP", 4))
 		return -1;
 
+	if(strncmp(data+9, "200", 3))
+		return 0;
+	
 	char * type = strstr(data, "Content-Type");
 	
 	if(type) type += 14; else return -1;
@@ -44,6 +54,19 @@ int http_parse(const char *data, char **split)
 	*split = strstr(type, "\r\n\r\n") + 4;
 	return 1;
 
+}
+
+//0 discard
+int nids_ip_filter(struct iphdr *iph, int len)
+{
+	struct iphdr *iph = (struct iphdr*)(iph);
+	struct tcphdr *tcph=(struct tcphdr*)((char *)iph + IPHL(iph));
+	
+	if(IPPROTO_TCP != iph->protocol)
+		return 0;
+	
+	printf("nids_ip_filter\n");
+	return 1;
 }
 
 void
@@ -66,19 +89,13 @@ tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
                                    // we won't be notified of urgent data
                                    // arrival
 #endif
-      fprintf (stderr, "%s established\n", buf);
+     // fprintf (stderr, "%s established\n", buf);
       return;
     }
   if (a_tcp->nids_state == NIDS_CLOSE)
     {
       // connection has been closed normally
       fprintf (stderr, "%s closing\n", buf);
-      return;
-    }
-  if (a_tcp->nids_state == NIDS_RESET)
-    {
-      // connection has been closed by RST
-      fprintf (stderr, "%s reset\n", buf);
       return;
     }
 
@@ -89,25 +106,19 @@ tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
 
       struct half_stream *hlf;
 
-      if (a_tcp->server.count_new_urg)
-      {
-        // new byte of urgent data has arrived 
-        strcat(buf,"(urgent->)");
-        buf[strlen(buf)+1]=0;
-        buf[strlen(buf)]=a_tcp->server.urgdata;
-        write(1,buf,strlen(buf));
-        return;
-      }
-      // We don't have to check if urgent data to client has arrived,
-      // because we haven't increased a_tcp->client.collect_urg variable.
-      // So, we have some normal data to take care of.
+//      if (a_tcp->server.count_new_urg)
+//       {
+//         // new byte of urgent data has arrived 
+//         strcat(buf,"(urgent->)");
+//         buf[strlen(buf)+1]=0;
+//         buf[strlen(buf)]=a_tcp->server.urgdata;
+//         write(1,buf,strlen(buf));
+//         return;
+//       }
       
-      if (a_tcp->server.count_new)
+      if (a_tcp->client.count_new)
 		{
-		hlf = &a_tcp->server; // analogical
-		strcat (buf, "(->)");
-		
-		fprintf(stderr,"%s",buf);
+		hlf = &a_tcp->client; // analogical
 
 		char *split;
 		if(hlf->count_new && !http_parse(hlf->data, &split))
@@ -122,7 +133,8 @@ int
 main ()
 {
   // here we can alter libnids params, for instance:
-  // nids_params.n_hosts=256;
+  nids_params.ip_filter=nids_ip_filter;
+  nids_params.pcap_filter = "host 204.232.175.78";
   if (!nids_init ())
   {
   	fprintf(stderr,"%s\n",nids_errbuf);

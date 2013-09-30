@@ -724,12 +724,12 @@ process_tcp(u_char * data, int skblen)
 //ECN
 #endif
 
-
   if (!(a_tcp = find_stream(this_tcphdr, this_iphdr, &from_client))) {
     if ((this_tcphdr->th_flags & TH_SYN) &&
 	!(this_tcphdr->th_flags & TH_ACK) &&
 	!(this_tcphdr->th_flags & TH_RST))
       add_new_tcp(this_tcphdr, this_iphdr);
+	  printf("FIRST\n");
     return;
   }
   if (from_client) {
@@ -746,6 +746,7 @@ process_tcp(u_char * data, int skblen)
       return;
     if (a_tcp->client.seq != ntohl(this_tcphdr->th_ack))
       return;
+	printf("SECOND\n");
     a_tcp->server.state = TCP_SYN_RECV;
     a_tcp->server.seq = ntohl(this_tcphdr->th_seq) + 1;
     a_tcp->server.first_data_seq = a_tcp->server.seq;

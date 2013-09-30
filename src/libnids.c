@@ -45,6 +45,7 @@ static int nids_ip_filter(struct ip *, int);
 static struct proc_node *ip_frag_procs;
 static struct proc_node *ip_procs;
 static struct proc_node *udp_procs;
+static struct proc_node *tcp_filter_procs;
 
 struct proc_node *tcp_procs;
 static int linktype;
@@ -446,16 +447,19 @@ static void process_udp(char *data)
 }
 static void gen_ip_proc(u_char * data, int skblen)
 {
+	struct proc_node *i;
     switch (((struct ip *) data)->ip_p) {
     case IPPROTO_TCP:
-	process_tcp(data, skblen);
-	break;
+// 		i = tcp_filter_procs;
+// 		if((i->item) (data))
+		process_tcp(data, skblen);
+		break;
     case IPPROTO_UDP:
-	process_udp((char *)data);
+		process_udp((char *)data);
 	break;
     case IPPROTO_ICMP:
-	if (nids_params.n_tcp_streams)
-	    process_icmp(data);
+		if (nids_params.n_tcp_streams)
+			process_icmp(data);
 	break;
     default:
 	break;
@@ -473,9 +477,14 @@ static void init_procs()
     udp_procs = 0;
 }
 
-void nids_register_udp(void (*x))
+void nids_register_tcp_filter(void (*x))
 {
-    register_callback(&udp_procs, x);
+    register_callback(&tcp_filter_procs, x);
+}
+
+void nids_unregister_tcp_filter(void (*x))
+{
+    register_callback(&tcp_filter_procs, x);
 }
 
 void nids_unregister_udp(void (*x))
@@ -696,9 +705,9 @@ int nids_run()
 
 int nids_run2(u_char *data, int skblen)
 {
-	printf("skblen = %d\n", skblen);
-    process_tcp(data, skblen);
-    return 0;
+	printf("here\n");
+    //process_tcp(data, skblen);
+    return 1;
 }
 
 void nids_exit()
