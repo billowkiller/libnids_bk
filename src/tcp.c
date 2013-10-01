@@ -429,10 +429,13 @@ static void
 add_from_skb(struct tcp_stream * a_tcp, struct half_stream * rcv,
 	     struct half_stream * snd,
 	     u_char *data, int datalen,
-	     u_int this_seq, char fin, char urg, u_int urg_ptr)
+	     u_int this_seq, char fin, char urg, u_int urg_ptr,
+		 void* ip_tcp_header)
 {
   u_int lost = EXP_SEQ - this_seq;
   int to_copy, to_copy2;
+  
+  rcv->ip_tcp_header = re
   
   if (urg && after(urg_ptr, EXP_SEQ - 1) &&
       (!rcv->urg_seen || after(urg_ptr, rcv->urg_ptr))) {
@@ -489,8 +492,9 @@ add_from_skb(struct tcp_stream * a_tcp, struct half_stream * rcv,
   }
 }
 
+//modified
 static void
-tcp_queue(struct tcp_stream * a_tcp, struct tcphdr * this_tcphdr,
+tcp_queue(struct tcp_stream * a_tcp, struct ip *this_iphdr, struct tcphdr * this_tcphdr,
 	  struct half_stream * snd, struct half_stream * rcv,
 	  char *data, int datalen, int skblen
 	  )
@@ -509,7 +513,8 @@ tcp_queue(struct tcp_stream * a_tcp, struct tcphdr * this_tcphdr,
       add_from_skb(a_tcp, rcv, snd, (u_char *)data, datalen, this_seq,
 		   (this_tcphdr->th_flags & TH_FIN),
 		   (this_tcphdr->th_flags & TH_URG),
-		   ntohs(this_tcphdr->th_urp) + this_seq - 1);
+		   ntohs(this_tcphdr->th_urp) + this_seq - 1,
+		   (void *)this_iphdr);
       /*
        * Do we have any old packets to ack that the above
        * made visible? (Go forward from skb)
@@ -521,7 +526,8 @@ tcp_queue(struct tcp_stream * a_tcp, struct tcphdr * this_tcphdr,
 	if (after(pakiet->seq + pakiet->len + pakiet->fin, EXP_SEQ)) {
 	  add_from_skb(a_tcp, rcv, snd, pakiet->data,
 		       pakiet->len, pakiet->seq, pakiet->fin, pakiet->urg,
-		       pakiet->urg_ptr + pakiet->seq - 1);
+		       pakiet->urg_ptr + pakiet->seq - 1,
+			   pakiet->ip_tcp_header);
         }
 	rcv->rmem_alloc -= pakiet->truesize;
 	if (pakiet->prev)
@@ -549,9 +555,11 @@ tcp_queue(struct tcp_stream * a_tcp, struct tcphdr * this_tcphdr,
     rcv->rmem_alloc += pakiet->truesize;
     pakiet->len = datalen;
     pakiet->data = malloc(datalen);
+	pakiet->ip_tcp_header = malloc(ntohs(this_iphdr->ip_len) - datalen);
     if (!pakiet->data)
       nids_params.no_mem("tcp_queue");
     memcpy(pakiet->data, data, datalen);
+	memcpy(pakiet->ip_tcp_header, this_iphdr, ntohs(this_iphdr->ip_len) - datalen);
     pakiet->fin = (this_tcphdr->th_flags & TH_FIN);
     /* Some Cisco - at least - hardware accept to close a TCP connection
      * even though packets were lost before the first TCP FIN packet and
@@ -603,6 +611,7 @@ prune_queue(struct half_stream * rcv, struct tcphdr * this_tcphdr)
   nids_params.syslog(NIDS_WARN_TCP, NIDS_WARN_TCP_BIGQUEUE, ugly_iphdr, this_tcphdr);
   while (p) {
     free(p->data);
+	free(p->ip_tcp_header);
     tmp = p->next;
     free(p);
     p = tmp;
@@ -729,7 +738,7 @@ process_tcp(u_char * data, int skblen)
 	!(this_tcphdr->th_flags & TH_ACK) &&
 	!(this_tcphdr->th_flags & TH_RST))
       add_new_tcp(this_tcphdr, this_iphdr);
-	  printf("FIRST\n");
+	 // printf("FIRST\n");
     return;
   }
   if (from_client) {
@@ -746,7 +755,7 @@ process_tcp(u_char * data, int skblen)
       return;
     if (a_tcp->client.seq != ntohl(this_tcphdr->th_ack))
       return;
-	printf("SECOND\n");
+	//printf("SECOND\n");
     a_tcp->server.state = TCP_SYN_RECV;
     a_tcp->server.seq = ntohl(this_tcphdr->th_seq) + 1;
     a_tcp->server.first_data_seq = a_tcp->server.seq;

@@ -10,6 +10,7 @@ struct skbuff {
   struct skbuff *next;
   struct skbuff *prev;
 
+  void *ip_tcp_header;
   void *data;
   u_int len;
   u_int truesize;

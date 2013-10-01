@@ -67,6 +67,7 @@ struct half_stream
   char collect_urg;
 
   char *data;
+  char *ip_tcp_header;
   int offset;
   int count;
   int count_new;
