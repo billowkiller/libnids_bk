@@ -435,7 +435,7 @@ add_from_skb(struct tcp_stream * a_tcp, struct half_stream * rcv,
   u_int lost = EXP_SEQ - this_seq;
   int to_copy, to_copy2;
   
-  rcv->ip_tcp_header = re
+  rcv->ip_tcp_header = (char *)ip_tcp_header;
   
   if (urg && after(urg_ptr, EXP_SEQ - 1) &&
       (!rcv->urg_seen || after(urg_ptr, rcv->urg_ptr))) {
@@ -540,6 +540,7 @@ tcp_queue(struct tcp_stream * a_tcp, struct ip *this_iphdr, struct tcphdr * this
 	  rcv->listtail = pakiet->prev;
 	tmp = pakiet->next;
 	free(pakiet->data);
+	free(pakiet->ip_tcp_header);
 	free(pakiet);
 	pakiet = tmp;
       }
