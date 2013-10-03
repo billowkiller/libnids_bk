@@ -879,7 +879,7 @@ process_tcp(u_char * data, int skblen)
     }
   }
   if (datalen + (this_tcphdr->th_flags & TH_FIN) > 0)
-    tcp_queue(a_tcp, this_tcphdr, snd, rcv,
+    tcp_queue(a_tcp, this_iphdr, this_tcphdr, snd, rcv,
 	      (char *) (this_tcphdr) + 4 * this_tcphdr->th_off,
 	      datalen, skblen);
   snd->window = ntohs(this_tcphdr->th_win);

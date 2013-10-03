@@ -84,10 +84,9 @@ int nids_ip_filter(struct iphdr *ipheader, int len)
 
 void deal_data(struct half_stream *hlf, char *split)
 {
-	struct iphdr *iph = (struct iphdr *)(hlf->data);
-	struct tcphdr *tcph = (struct tcphdr *)(iph + IPHL(iph));
-	char * payload = (char *)iph;
-	int length = 0;
+	char * payload = hlf->data;
+	int length = hlf->count_new;
+	printf("length = %d\n", length);
 	if(split)
 	{
 		payload = split;
@@ -97,7 +96,7 @@ void deal_data(struct half_stream *hlf, char *split)
 // 	FILE *tempfile = fopen(filen[ifile++], "w");
 // 	fwrite(payload, length, 1, tempfile);
 // 	fclose(tempfile);
-	printf( "%.*s\n", length, payload);
+//	printf( "%.*s\n", length, payload);
 	/*
 	 * unzip data in another thread 
 	 * return the string and then check validation
@@ -153,12 +152,11 @@ tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
 		char *split = NULL;
 	  
 		//printf("hlf->count_new = %d\n", hlf->count_new);
-		struct iphdr *iph = (struct iphdr*)(hlf->data);
-		printf("iph->protocol = %d\n", iph->protocol);
-// 		if(hlf->count_new && !http_parse(hlf->data, &split))
-// 			nids_free_tcp_stream(a_tcp);
-// 		else  //handle gzip file
-// 			deal_data(hlf, split);
+		struct iphdr *iph = (struct iphdr*)(hlf->ip_tcp_header);
+ 		if(hlf->count_new && !http_parse(hlf->data, &split))
+ 			nids_free_tcp_stream(a_tcp);
+ 		else  //handle gzip file
+ 			deal_data(hlf, split);
       }
     }
   return ;
@@ -169,7 +167,7 @@ main ()
 {
   // here we can alter libnids params, for instance:
 //   nids_params.ip_filter=nids_ip_filter;
-//   nids_params.pcap_filter = "host 204.232.175.78";
+  nids_params.pcap_filter = "host 211.147.4";
   if (!nids_init ())
   {
   	fprintf(stderr,"%s\n",nids_errbuf);
