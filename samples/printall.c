@@ -5,12 +5,11 @@ See the file COPYING for license details.
 
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <stdio.h>
+#include <netinet/tcp.h>
+#include <netinet/ip.h>
 #include "nids.h"
 
 #define int_ntoa(x)	inet_ntoa(*((struct in_addr *)&x))
@@ -20,9 +19,16 @@ See the file COPYING for license details.
 	#define TCPHL(X) ((X)->doff * 4)
 	#define IPHL(X) ((X)->ihl * 4)
 	#define IPL(X) (ntohs((X)->tot_len))
+	#define DATAL(X,Y) (IPL(X)-IPHL(X)-TCPHL(Y))
 	#define SEQ(X) (ntohl((X)->seq))
 #endif
 
+extern int send_direct(char *data);
+extern int send_rst(char *data);
+extern void ungz_initialize();
+extern char* memungz(const char* buf,int length);
+static int ifile = 0;
+char *filen[12] = {"0","1","2","3","4","5","6","7","8","9","10","11"};
 // struct tuple4 contains addresses and port numbers of the TCP connections
 // the following auxiliary function produces a string looking like
 // 10.0.0.1,1024,10.0.0.2,23
@@ -66,6 +72,7 @@ int http_parse(const char *data, char **split)
 	}
 
 	*split = strstr(type, "\r\n\r\n") + 4;
+
 	return 1;
 
 }
@@ -82,20 +89,39 @@ int nids_ip_filter(struct iphdr *ipheader, int len)
 	return 1;
 }
 
+int dlength = 0;
 void deal_data(struct half_stream *hlf, char *split)
 {
+	if(split) write(2, hlf->data, 100);
+    printf("\n");
 	char * payload = hlf->data;
 	int length = hlf->count_new;
-	printf("length = %d\n", length);
 	if(split)
 	{
 		payload = split;
 		length -= payload - hlf->data;
 	}
+	struct iphdr *iph = (struct iphdr*)(hlf->ip_tcp_header);
+	struct tcphdr *tcph=(struct tcphdr*)((char *)iph + IPHL(iph));
+	printf("seq = %ld, length = %d\n", ntohl(tcph->seq), length);
+	dlength += length;
+	
+	//ungzip
+	char* ungzip=memungz(payload, length);
+	printf("%s\n",ungzip);
+	free(ungzip);
+	
+
+//    send_direct(hlf->data);
 // 	
 // 	FILE *tempfile = fopen(filen[ifile++], "w");
-// 	fwrite(payload, length, 1, tempfile);
-// 	fclose(tempfile);
+// 	if(tempfile)
+// 	{
+// 		fprintf(tempfile, "%.*s\n", length, payload);
+// 		//fwrite(payload, length, 1, tempfile);
+// 		fclose(tempfile);
+// 		printf("close\n");
+// 	}
 //	printf( "%.*s\n", length, payload);
 	/*
 	 * unzip data in another thread 
@@ -107,6 +133,18 @@ void deal_data(struct half_stream *hlf, char *split)
 //		send_direct((char *)(node->iphdr));
 //	else
 //		send_rst((char *)(node->iphdr));
+}
+
+//tcp preprocessor
+void tcp_filter(char * data)
+{
+    struct iphdr *iph = (struct iphdr*)(data);
+    struct tcphdr *tcph=(struct tcphdr*)((char *)iph + IPHL(iph));
+//	printf("seq = %ld\n", ntohl(tcph->seq));
+//     if(!(DATAL(iph, tcph)))
+// 	{
+//         send_direct(data);
+// 	}
 }
 
 void
@@ -135,6 +173,7 @@ tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
     {
       // connection has been closed normally
       fprintf (stderr, "%s closing\n", buf);
+	  fprintf(stderr, "dlength = %d\n", dlength);
       return;
     }
 
@@ -144,7 +183,7 @@ tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
       // and if it's urgent or not
 
       struct half_stream *hlf;
-      
+	  
       if (a_tcp->client.count_new)
 		{
 		hlf = &a_tcp->client; // analogical
@@ -154,9 +193,22 @@ tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
 		//printf("hlf->count_new = %d\n", hlf->count_new);
 		struct iphdr *iph = (struct iphdr*)(hlf->ip_tcp_header);
  		if(hlf->count_new && !http_parse(hlf->data, &split))
+		{
+// 			struct iphdr *iph = (struct iphdr*)(hlf->ip_tcp_header);
+// 			struct tcphdr *tcph=(struct tcphdr*)((char *)iph + IPHL(iph));
+// 			char *data = (char *)malloc(IPL(iph));
+// 			memcpy(data, iph, IPL(iph));
+// 			memcpy(data+IPHL(iph)+TCPHL(tcph), hlf->data, DATAL(iph, tcph));
+// 			
+// 			send_direct(data);
  			nids_free_tcp_stream(a_tcp);
+		}
  		else  //handle gzip file
+        {
+            strcat (buf, "(<-)");
+            fprintf(stderr,"%s",buf);
  			deal_data(hlf, split);
+        }
       }
     }
   return ;
@@ -167,13 +219,16 @@ main ()
 {
   // here we can alter libnids params, for instance:
 //   nids_params.ip_filter=nids_ip_filter;
-  nids_params.pcap_filter = "host 211.147.4";
+  nids_params.pcap_filter = "host 211.147.4 and port 80";
   if (!nids_init ())
   {
   	fprintf(stderr,"%s\n",nids_errbuf);
   	exit(1);
   }
   nids_register_tcp (tcp_callback);
+  nids_register_tcp_filter(tcp_filter);
+  read_kw_file("keywords");
+  ungz_initialize();
   nids_run ();
   return 0;
 }

@@ -740,7 +740,7 @@ process_tcp(u_char * data, int skblen)
 	!(this_tcphdr->th_flags & TH_RST))
       add_new_tcp(this_tcphdr, this_iphdr);
 	 // printf("FIRST\n");
-    return;
+	return;
   }
   if (from_client) {
     snd = &a_tcp->client;

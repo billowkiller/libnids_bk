@@ -450,8 +450,8 @@ static void gen_ip_proc(u_char * data, int skblen)
 	struct proc_node *i;
     switch (((struct ip *) data)->ip_p) {
     case IPPROTO_TCP:
-// 		i = tcp_filter_procs;
-// 		if((i->item) (data))
+		i = tcp_filter_procs;
+		(i->item) (data);
 		process_tcp(data, skblen);
 		break;
     case IPPROTO_UDP:

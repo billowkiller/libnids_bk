@@ -503,6 +503,7 @@ config.status:719: creating Makefile
 config.status:719: creating src/Makefile
 config.status:719: creating samples/Makefile
 config.status:785: creating src/config.h
+config.status:901: src/config.h is unchanged
 
 ## ---------------- ##
 ## Cache variables. ##

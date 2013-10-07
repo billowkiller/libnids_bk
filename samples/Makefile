@@ -22,22 +22,25 @@ LIBS		= -L../src -lnids $(PCAPLIB) $(LNETLIB) -lgthread-2.0 -lnsl
 .c.o:
 	$(CC) -c $(CFLAGS) -I. $(LIBS_CFLAGS) $<
 
-all: overflows printall sniff
+all: printall
 static shared: all
 
-overflows: overflows.o
-	$(CC) -o $@ overflows.o $(LDFLAGS) $(LIBS)
+printall: printall.o data_send.o copeungz.o
+	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
 
-printall: printall.o
-	$(CC) -o $@ printall.o $(LDFLAGS) $(LIBS)
-
-sniff: sniff.o
-	$(CC) -o $@ sniff.o $(LDFLAGS) $(LIBS)
+printall.o: printall.c
+	$(CC) -c $< $(LDFLAGS) $(LIBS)
+	
+data_send.o: data_send.c
+	$(CC) -c $< 
+	
+copeungz.o: copeungz.c
+	$(CC) -c $< -pthread 
 
 static shared install installshared:
 	@true
 
 clean:
-	rm -f *.o *~ overflows printall sniff
+	rm -f *.o *~ printall
 
 # EOF
