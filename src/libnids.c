@@ -703,10 +703,9 @@ int nids_run()
     return 0;
 }
 
-int nids_run2(u_char *data, int skblen)
+int nids_store_ip(u_char *data, int skblen)
 {
-	printf("here\n");
-    //process_tcp(data, skblen);
+    process_tcp(data, skblen);
     return 1;
 }
 

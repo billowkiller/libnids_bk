@@ -158,7 +158,7 @@ void nids_unregister_udp (void (*));
 void nids_killtcp (struct tcp_stream *);
 void nids_discard (struct tcp_stream *, int);
 int nids_run ();
-int nids_run2(u_char *, int);
+int nids_store_ip(u_char *, int);
 void nids_free_tcp_stream(struct tcp_stream * a_tcp);
 void nids_exit(void);
 int nids_getfd (void);

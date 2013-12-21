@@ -501,9 +501,7 @@ on billowkiller-mint
 
 config.status:719: creating Makefile
 config.status:719: creating src/Makefile
-config.status:719: creating samples/Makefile
-config.status:785: creating src/config.h
-config.status:901: src/config.h is unchanged
+config.status:735: error: cannot find input file: samples/Makefile.in
 
 ## ---------------- ##
 ## Cache variables. ##
@@ -683,4 +681,4 @@ target_vendor='pc'
 #define STDC_HEADERS 1
 #define TIME_WITH_SYS_TIME 1
 
-configure: exit 0
+configure: exit 1
