@@ -28,6 +28,7 @@
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <net/ethernet.h>
+#include <glib.h>
 #include "nids.h"
 #include "ngx_queue.h" 
 
@@ -57,6 +58,34 @@ typedef struct
     ngx_queue_t queue;  
 } pack_queue_t;  
 
+
+static GHashTable *table;
+static int pack_num = 0;
+
+void free_ip_pack(ip_pack *pack)
+{
+    free(pack->ip_tcp_header);
+    free(pack->payload);
+}
+/*
+ * TODO: free ip queue when delete table key
+ */
+void free_value(gpointer data) 
+{      
+    ngx_queue_t *ip_queue = (ngx_queue_t *)data;
+    ngx_queue_t *q = ngx_queue_head(ip_queue);  
+    pack_num = 0;
+    for (; q != ngx_queue_sentinel(ip_queue); q = ngx_queue_next(q))  
+    {  
+        pack_queue_t *pack = ngx_queue_data(q, pack_queue_t, queue);
+        ngx_queue_remove(q);
+        free_ip_pack(&pack->pack);
+        free(pack);
+        q = ip_queue;
+    } 
+    free(ip_queue);
+}
+
 // struct tuple4 contains addresses and port numbers of the TCP connections
 // the following auxiliary function produces a string looking like
 // 10.0.0.1,1024,10.0.0.2,23
@@ -70,8 +99,6 @@ char * adres (struct tuple4 addr)
     return buf;
 }
 
-ngx_queue_t *ip_queue;
-static int pack_num = 0;
 void tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
 {
     char buf[1024];
@@ -88,8 +115,9 @@ void tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
                                      // server
 
         printf("ip_queue set up\n");
-        ip_queue = (ngx_queue_t *)malloc(sizeof(ngx_queue_t));
+        ngx_queue_t *ip_queue = (ngx_queue_t *)malloc(sizeof(ngx_queue_t));
         ngx_queue_init(ip_queue);
+        g_hash_table_insert(table, buf, ip_queue);
         return;
     }
 
@@ -98,17 +126,21 @@ void tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
         fprintf (stderr, "%s closing\n", buf);
 
         pack_num = 0;
+        ngx_queue_t *ip_queue = g_hash_table_lookup(table, buf);
         ngx_queue_t *q = ngx_queue_head(ip_queue);  
         for (; q != ngx_queue_sentinel(ip_queue); q = ngx_queue_next(q))  
         {  
             pack_queue_t *pack = ngx_queue_data(q, pack_queue_t, queue);
-            printf("*****pack %d******\n%.*s\n", ++pack_num, pack->pack.payload_len, (char *)(pack->pack.payload));
+//            printf("*****pack %d******\n%.*s\n", ++pack_num, pack->pack.payload_len, (char *)(pack->pack.payload));
         }  
+        g_hash_table_remove(table, buf);
         return;
     }
 
     if (a_tcp->nids_state == NIDS_DATA && a_tcp->client.count_new)
     {
+        ngx_queue_t *ip_queue = g_hash_table_lookup(table, buf);
+
         struct half_stream *hlf = &a_tcp->client;
 
         //hlf->data 
@@ -179,12 +211,13 @@ void monitor()
 
 int main ()
 {
-  if (!nids_init ())
-  {
-          fprintf(stderr,"%s\n",nids_errbuf);
-          exit(1);
-  }
-  nids_register_tcp(tcp_callback);
-  monitor();
-  return 0;
+    table = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, free_value);
+    if (!nids_init ())
+    {
+            fprintf(stderr,"%s\n",nids_errbuf);
+            exit(1);
+    }
+    nids_register_tcp(tcp_callback);
+    monitor();
+    return 0;
 }

@@ -59,21 +59,9 @@ struct ngx_queue_s {
     (q)->prev
 
 
-#if (NGX_DEBUG)
-
-#define ngx_queue_remove(x)                                                   \
-    (x)->next->prev = (x)->prev;                                              \
-    (x)->prev->next = (x)->next;                                              \
-    (x)->prev = NULL;                                                         \
-    (x)->next = NULL
-
-#else
-
 #define ngx_queue_remove(x)                                                   \
     (x)->next->prev = (x)->prev;                                              \
     (x)->prev->next = (x)->next
-
-#endif
 
 
 #define ngx_queue_split(h, q, n)                                              \
