@@ -29,8 +29,9 @@
 #include <netinet/ip.h>
 #include <net/ethernet.h>
 #include <glib.h>
-#include "nids.h"
-#include "ngx_queue.h" 
+#include <zlib.h>
+#include <nids.h>
+#include "cache.h"
 
 #define int_ntoa(x)        inet_ntoa(*((struct in_addr *)&x))
 
@@ -44,46 +45,22 @@
         #define SEQ(X) (ntohl(((struct tcphdr *)(X))->seq)) //tcp seq number
 #endif
 
-//ip packet queue structure  
-typedef struct  
-{  
-    void* ip_tcp_header;  
-    void* payload;
-    int payload_len;  
-} ip_pack;  
-
-typedef struct  
-{  
-    ip_pack pack;  
-    ngx_queue_t queue;  
-} pack_queue_t;  
-
+extern int inflate_init(z_stream *strm);
+extern int inflate_data(z_stream *strm, int size, char *compressdata);
 
 static GHashTable *table;
 static int pack_num = 0;
+static z_stream strm;
 
-void free_ip_pack(ip_pack *pack)
-{
-    free(pack->ip_tcp_header);
-    free(pack->payload);
-}
 /*
- * TODO: free ip queue when delete table key
+ * TODO: free stream_buf when delete table key
  */
 void free_value(gpointer data) 
 {      
-    ngx_queue_t *ip_queue = (ngx_queue_t *)data;
-    ngx_queue_t *q = ngx_queue_head(ip_queue);  
-    pack_num = 0;
-    for (; q != ngx_queue_sentinel(ip_queue); q = ngx_queue_next(q))  
-    {  
-        pack_queue_t *pack = ngx_queue_data(q, pack_queue_t, queue);
-        ngx_queue_remove(q);
-        free_ip_pack(&pack->pack);
-        free(pack);
-        q = ip_queue;
-    } 
-    free(ip_queue);
+    stream_buf *stmb = (stream_buf *)data;
+    free(stmb->key);
+    free(stmb->eden);
+    free(stmb);
 }
 
 // struct tuple4 contains addresses and port numbers of the TCP connections
@@ -99,6 +76,7 @@ char * adres (struct tuple4 addr)
     return buf;
 }
 
+static int length=0;
 void tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
 {
     char buf[1024];
@@ -114,50 +92,46 @@ void tcp_callback (struct tcp_stream *a_tcp, void ** this_time_not_needed)
         a_tcp->server.collect_urg++; // we want urgent data received by a
                                      // server
 
-        printf("ip_queue set up\n");
-        ngx_queue_t *ip_queue = (ngx_queue_t *)malloc(sizeof(ngx_queue_t));
-        ngx_queue_init(ip_queue);
-        g_hash_table_insert(table, buf, ip_queue);
+        stream_buf *stmb = (stream_buf *)malloc(sizeof(stream_buf));
+        stmb_init(stmb, buf);
+        g_hash_table_insert(table, buf, stmb);
+        inflate_init(&strm);
         return;
     }
 
     if (a_tcp->nids_state == NIDS_CLOSE)
     {
-        fprintf (stderr, "%s closing\n", buf);
-
-        pack_num = 0;
-        ngx_queue_t *ip_queue = g_hash_table_lookup(table, buf);
-        ngx_queue_t *q = ngx_queue_head(ip_queue);  
-        for (; q != ngx_queue_sentinel(ip_queue); q = ngx_queue_next(q))  
-        {  
-            pack_queue_t *pack = ngx_queue_data(q, pack_queue_t, queue);
-//            printf("*****pack %d******\n%.*s\n", ++pack_num, pack->pack.payload_len, (char *)(pack->pack.payload));
-        }  
+        stream_buf *stmb = g_hash_table_lookup(table, buf);
+        length += EDEN_DISTANCE(stmb);
+        printf("length = %d\n", length);
+        inflate_data(&strm, EDEN_DISTANCE(stmb), EDEN_POS(stmb));
         g_hash_table_remove(table, buf);
+        fprintf (stderr, "%s closing\n", buf);
         return;
     }
 
     if (a_tcp->nids_state == NIDS_DATA && a_tcp->client.count_new)
     {
-        ngx_queue_t *ip_queue = g_hash_table_lookup(table, buf);
+        pack_num++;
+        stream_buf *stmb = g_hash_table_lookup(table, buf);
 
         struct half_stream *hlf = &a_tcp->client;
 
         //hlf->data 
         //hlf->ip_tcp_header
-        pack_queue_t * pack = (pack_queue_t *)malloc(sizeof(pack_queue_t));
-        pack->pack.ip_tcp_header = malloc(IPL(hlf->ip_tcp_header));
-        memcpy(pack->pack.ip_tcp_header, hlf->ip_tcp_header, IPL(hlf->ip_tcp_header));
-        pack->pack.payload_len = PAYLOADL(hlf->ip_tcp_header);
-        pack->pack.payload = malloc(pack->pack.payload_len);
-        memcpy(pack->pack.payload, hlf->data, pack->pack.payload_len);
-
-        ngx_queue_init(&pack->queue);
-     
-        //insert this point into the points queue  
-        ngx_queue_insert_tail(ip_queue, &pack->queue);
-        printf("pack %d into queue\n", ++pack_num);
-        printf("    |- length %d\n", pack->pack.payload_len);
+        char *payload = hlf->data;
+        int payload_len = hlf->count_new;
+        if(pack_num == 1)
+        {
+            payload =  strstr(payload, "\r\n\r\n") + 4;
+            payload_len -= payload - (char *)(hlf->data);
+//            printf("%.*s\n", hlf->count_new-payload_len, (char *)hlf->data);
+        }
+        if(stmb_memcpy(stmb, payload_len, payload))
+        {
+            length += EDEN_SIZE;
+            inflate_data(&strm, EDEN_SIZE, EDEN_READY(stmb));
+        }
     }
   return ;
 }
