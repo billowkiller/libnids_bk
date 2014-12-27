@@ -67,7 +67,8 @@ struct half_stream
   char collect_urg;
 
   char *data;
-  char *ip_tcp_header;
+  //@billowkiller
+  char *ip_tcp_header;    //describe ip & tcp headers
   int offset;
   int count;
   int count_new;
@@ -143,8 +144,8 @@ struct tcp_timeout
 };
 
 int nids_init (void);
-/*	tcp_filter before handle tcp_process */
-void nids_register_tcp_filter (void (*));
+/* @billowkiller, tcp_filter before handle tcp_process*/
+void nids_register_tcp_filter (void (*));               
 void nids_unregister_tcp_filter (void (*));
 /* end */
 void nids_register_ip_frag (void (*));
@@ -157,8 +158,10 @@ void nids_register_udp (void (*));
 void nids_unregister_udp (void (*));
 void nids_killtcp (struct tcp_stream *);
 void nids_discard (struct tcp_stream *, int);
-int nids_run ();
-int nids_store_ip(u_char *, int);
+/* @billowkiller */
+int nids_run (); 
+int nids_store_ip(u_char *, int); // store ip fragment and length
+/* end */
 void nids_free_tcp_stream(struct tcp_stream * a_tcp);
 void nids_exit(void);
 int nids_getfd (void);
